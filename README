@@ -1,0 +1,5 @@
+#run the webserver
+~/.local/bin/gunicorn main:app -b 0.0.0.0:5000 -p gunicorn.pid -D
+#run the bots
+python update_bot.py start
+python register_bot.py start

@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+
+<head>
+    <meta charset="UTF-16">
+    <title>Mails</title>
+
+        {% if g.user.is_authenticated %}
+        logged in as {{ g.user.email }}‌ | <a href="{{ url_for('logout') }}">Logout</a>
+        {% endif %}
+</head>
+<body>
+
+
+{% for mail in mails %}
+<div id="header">
+<b>{{ mail.from_ }}</b> - {{ mail.subject }} - {{ mail.date }}
+</div>
+<div id="snippet">
+{{ mail.snippet|safe }}
+</div>
+{% endfor %}
+
+</body>
+</html>
