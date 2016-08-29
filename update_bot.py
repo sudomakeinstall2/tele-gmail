@@ -1,16 +1,18 @@
 import telepot
 
-import time,sys
+import time, sys, datetime
 
 from main import db, User
 
 from hashing import check_secure_val
 
-from gmail_api import GetMessage, ListMessagesWithLabels, ListMessagesUntillId, Mail, createMessageFromMail
+from gmail_api import GetMessage, ListMessagesMatchingQuery, Mail, createMessageFromMail
 
 from oauth2client import client
 
 from apiclient import discovery
+
+from utilities import datetime_from_string_date
 
 import httplib2
 
@@ -37,23 +39,41 @@ class UpdateDaemon(Daemon):
                     db.session.commit()
                     print 'end refresh'
                 service = discovery.build('gmail', 'v1', http=http)
-                msgs = ListMessagesUntillId(service, u.email, u.previous)
+                #msgs = ListMessagesUntillId(service, u.email, u.previous)
+                #msgs = ListMessagesWithLabels(service, u.email, maxResults=1)
+                msgs = ListMessagesMatchingQuery(service, u.email, 'after: '+u.previous)
                 if len(msgs) == 0:
                     #bot.sendMessage(u.chat_id, 'no new messages for ' + u.email)
                     continue
                 print 'found %d new messages',len(msgs)
+                pre_time = int(u.previous)
                 for m in msgs[::-1]:
                     message = GetMessage(service, u.email, m['id'])
-                    u.previous = m['id']
+                    msg_time = int(message['internalDate'])/1000
+                    if msg_time <= pre_time:
+                        continue
+                    u.previous = msg_time
                     mail = Mail()
                     mail.snippet = message['snippet']
+                    mail.internal_time = datetime.datetime.utcfromtimestamp(msg_time)
+                    #~ print 'internal', mail.internal_time.strftime('%Y-%m-%d %H:%M:%S')
+                    #print message['internalDate']
+                    #print message['payload']['headers']
                     for x in message['payload']['headers']:
                         if x['name'] == 'Subject':
                             mail.subject = x['value']
-                        elif x['name'] == 'Date':
-                            mail.date = x['value']
+                        #~ elif x['name'] == 'Date':
+                            #~ mail.raw_date = x['value']
+                            #~ print 'raw_date', x['value']
+                            #~ mail.date = datetime_from_string_date(mail.raw_date)
+                            #~ print 'date', mail.date
                         elif x['name'] == 'From':
                             mail.from_ = x['value']
+                        #~ elif x["name"] == "Received":
+                            #~ raw = x["value"].split(";")[-1].strip()
+                            #~ print 'received', raw
+                            #~ mail.recv_date = datetime_from_string_date(raw)
+                            #~ print 'rec date', mail.recv_date
                     bot.sendMessage(u.chat_id, createMessageFromMail(mail))
                     db.session.commit()
             print 'sleeping'
@@ -73,6 +93,8 @@ if __name__ == "__main__":
             daemon.stop()
         elif 'restart' == sys.argv[1]:
             daemon.restart()
+        elif 'run' == sys.argv[1]:
+            daemon.run()
         else:
             print "Unknown command"
             sys.exit(2)

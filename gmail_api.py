@@ -3,12 +3,29 @@ from apiclient import discovery
 from oauth2client import client
 import httplib2
 
+import datetime
+
 class Mail():
+    
+    def __init__(self):
+        self.from_ = "**NO FROM**"
+        self.subject = "**NO SUBJECT**"
+#        self.recv_date = datetime.datetime.utcfromtimestamp(0)
+#        self.date = datetime.datetime.utcfromtimestamp(0)
+        self.internal_time = datetime.datetime.utcfromtimestamp(0)
+#        self.raw_date = "**NO RAW DATE**"
     pass
 
 def createMessageFromMail(mail):
+ #   print mail.recv_date, mail.date, mail.internal_time, mail.raw_date
+ #   print type(mail.recv_date), type(mail.date), type(mail.internal_time)
     s = ""
-    s = mail.from_+ "\n" +mail.subject
+    s = mail.from_+ "\n" 
+    s += mail.subject + "\n" 
+#    s += mail.recv_date.strftime('%Y-%m-%d %H:%M:%S') + "\n" 
+#    s += mail.date.strftime('%Y-%m-%d %H:%M:%S') + "\n" 
+#    s += mail.raw_date + "\n" 
+    s += mail.internal_time.strftime('%Y-%m-%d %H:%M:%S')
     return s
 
 def GetMessage(service, user_id, msg_id):
@@ -31,6 +48,39 @@ def GetMessage(service, user_id, msg_id):
     return message
   except errors.HttpError, error:
     print 'An error occurred: %s' % error
+    
+
+def ListMessagesMatchingQuery(service, user_id, query=''):
+  """List all Messages of the user's mailbox matching the query.
+
+  Args:
+    service: Authorized Gmail API service instance.
+    user_id: User's email address. The special value "me"
+    can be used to indicate the authenticated user.
+    query: String used to filter messages returned.
+    Eg.- 'from:user@some_domain.com' for Messages from a particular sender.
+
+  Returns:
+    List of Messages that match the criteria of the query. Note that the
+    returned list contains Message IDs, you must use get with the
+    appropriate ID to get the details of a Message.
+  """
+  try:
+    response = service.users().messages().list(userId=user_id,
+                                               q=query).execute()
+    messages = []
+    if 'messages' in response:
+      messages.extend(response['messages'])
+
+    while 'nextPageToken' in response:
+      page_token = response['nextPageToken']
+      response = service.users().messages().list(userId=user_id, q=query,
+                                         pageToken=page_token).execute()
+      messages.extend(response['messages'])
+
+    return messages
+  except errors.HttpError, error:
+    print 'An error occurred: %s' % error    
     
 def ListMessagesUntillId(service, user_id, msg_id):
   """List all Messages of the user's mailbox with label_ids applied.

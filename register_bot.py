@@ -1,6 +1,7 @@
 import sys
 import time
 import telepot
+import datetime
 
 from main import db, User
 
@@ -40,19 +41,21 @@ class RegisterDaemon(Daemon):
             mails = []
             for m in l:
                 message = GetMessage(service, user.email, m['id'])
-                user.previous = m['id']
+                msg_time = int(message['internalDate'])/1000
+                user.previous = msg_time
                 mail = Mail()
                 mail.snippet = message['snippet']
+                mail.internal_time = datetime.datetime.utcfromtimestamp(msg_time)
                 for x in message['payload']['headers']:
                     if x['name'] == 'Subject':
                         mail.subject = x['value']
-                    elif x['name'] == 'Date':
-                        mail.date = x['value']
+                    #elif x['name'] == 'Date':
+                     #   mail.date = x['value']
                     elif x['name'] == 'From':
                         mail.from_ = x['value']
                 self.bot.sendMessage(chat_id, createMessageFromMail(mail))
 
-                print 'previous id email', user.previous
+                #print 'previous id email', user.previous
             db.session.commit()
             return True
 
