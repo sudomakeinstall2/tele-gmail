@@ -18,65 +18,71 @@ import httplib2
 
 from daemon import Daemon
 
+import logging
+logging.basicConfig(format='%(asctime)s %(message)s',
+                    level=logging.DEBUG,
+                    datefmt='%m/%d/%Y %I:%M:%S %p')
+
 class UpdateDaemon(Daemon):
 
     def run(self):
-        TOKEN = '265185588:AAGBUc8hn7O1RtcttDHtYikie4QLCH12mrE'
+        with open('bot_token.txt','r') as f:
+            TOKEN = f.read().strip()
         bot = telepot.Bot(TOKEN)
         while 1:
             users = User.query.all()
             for u in users:
-                print 'checking user ', u.email
+                db.session.refresh(u)
+                logging.info('checking user %s',u.email)
                 if not u.chat_id:
-                    print 'user',u.email,"doesn't have chat_id"
+                    logging.info("user %s doesn't have chat_id")
                     continue
-                credentials = client.OAuth2Credentials.from_json(u.credentials)
-                http = credentials.authorize(httplib2.Http())
-                if credentials.access_token_expired:
-                    print 'credential for '+u.email+' has expired, refreshing'
-                    credentials.refresh(http)
-                    u.credentials = credentials.to_json()
-                    db.session.commit()
-                    print 'end refresh'
-                service = discovery.build('gmail', 'v1', http=http)
-                #msgs = ListMessagesUntillId(service, u.email, u.previous)
-                #msgs = ListMessagesWithLabels(service, u.email, maxResults=1)
-                msgs = ListMessagesMatchingQuery(service, u.email, 'after: '+u.previous)
-                if len(msgs) == 0:
-                    #bot.sendMessage(u.chat_id, 'no new messages for ' + u.email)
-                    continue
-                print 'found %d new messages',len(msgs)
-                pre_time = int(u.previous)
-                for m in msgs[::-1]:
-                    message = GetMessage(service, u.email, m['id'])
-                    msg_time = int(message['internalDate'])/1000
-                    if msg_time <= pre_time:
+                try:
+                    credentials = client.OAuth2Credentials.from_json(u.credentials)
+                    http = credentials.authorize(httplib2.Http())
+                    if credentials.access_token_expired:
+                        logging.info("credentials for %s has expired, refreshing", u.email)
+                        credentials.refresh(http)
+                        u.credentials = credentials.to_json()
+                        db.session.commit()
+                        logging.info("successful refresh")
+                    service = discovery.build('gmail', 'v1', http=http)
+                    #msgs = ListMessagesWithLabels(service, u.email, maxResults=1)
+                    msgs = ListMessagesMatchingQuery(service, u.email, 'after: '+u.previous)
+                    if len(msgs) == 0:
+                        logging.info("no new messages for %s", u.email)
                         continue
-                    u.previous = msg_time
-                    mail = Mail()
-                    mail.snippet = message['snippet']
-                    mail.internal_time = datetime.datetime.utcfromtimestamp(msg_time)
-                    #~ print 'internal', mail.internal_time.strftime('%Y-%m-%d %H:%M:%S')
-                    #print message['internalDate']
-                    #print message['payload']['headers']
-                    for x in message['payload']['headers']:
-                        if x['name'] == 'Subject':
-                            mail.subject = x['value']
-                        #~ elif x['name'] == 'Date':
-                            #~ mail.raw_date = x['value']
-                            #~ print 'raw_date', x['value']
-                            #~ mail.date = datetime_from_string_date(mail.raw_date)
-                            #~ print 'date', mail.date
-                        elif x['name'] == 'From':
-                            mail.from_ = x['value']
-                        #~ elif x["name"] == "Received":
-                            #~ raw = x["value"].split(";")[-1].strip()
-                            #~ print 'received', raw
-                            #~ mail.recv_date = datetime_from_string_date(raw)
-                            #~ print 'rec date', mail.recv_date
-                    bot.sendMessage(u.chat_id, createMessageFromMail(mail))
+                    logging.info( 'found %d new messages',len(msgs))
+                    pre_time = int(u.previous)
+                    for m in msgs[::-1]:
+                        message = GetMessage(service, u.email, m['id'])
+                        msg_time = int(message['internalDate'])/1000
+                        if msg_time <= pre_time:
+                            continue
+                        u.previous = msg_time
+                        mail = Mail()
+                        mail.snippet = message['snippet']
+                        mail.internal_time = datetime.datetime.utcfromtimestamp(msg_time)
+                        for x in message['payload']['headers']:
+                            if x['name'] == 'Subject':
+                                mail.subject = x['value']
+                            #~ elif x['name'] == 'Date':
+                                #~ mail.raw_date = x['value']
+                                #~ print 'raw_date', x['value']
+                                #~ mail.date = datetime_from_string_date(mail.raw_date)
+                                #~ print 'date', mail.date
+                            elif x['name'] == 'From':
+                                mail.from_ = x['value']
+                        bot.sendMessage(u.chat_id, createMessageFromMail(mail))
+                        db.session.commit()
+                except client.HttpAccessTokenRefreshError:
+                    logging.info("access for %s has been revoked", u.email)
+                    bot.sendMessage(u.chat_id, "Access has been revoked go to " + \
+                                                "http://robotoos.ir:5000/login")
+                    db.session.delete(u)
                     db.session.commit()
-            print 'sleeping'
+                    
+            logging.info("sleeping")
             sys.stdout.flush()
             time.sleep(120)
             

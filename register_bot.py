@@ -17,25 +17,33 @@ from daemon import Daemon
 
 import httplib2
 
+import logging
+logging.basicConfig(format='%(asctime)s %(message)s',
+                    level=logging.DEBUG,
+                    datefmt='%m/%d/%Y %I:%M:%S %p')
+
 class RegisterDaemon(Daemon):
 
     def register(self, code, chat_id):
         user_id = check_secure_val(code)
         if not user_id:
-            print 'code not right'
+            logging.info("register failed because code is not right")
             return False
         user = User.query.filter_by(user_id = user_id).first()
         if not user:
-            print 'user not right'
+            logging.info("register failed because user is not right")
             return False
         if not user.chat_id or not user.previous:
-            print 'init user in db'
+            logging.info("initializing user: setting chat id and previous")
             user.chat_id = chat_id
             credentials = client.OAuth2Credentials.from_json(user.credentials)
-            if credentials.access_token_expired:
-                self.bot.sendMessage(chat_id, 'credentials expired')
-                return False
             http = credentials.authorize(httplib2.Http())
+            if credentials.access_token_expired:
+                logging.info("credentials for %s has expired, refreshing", u.email)
+                credentials.refresh(http)
+                user.credentials = credentials.to_json()
+                db.session.commit()
+                logging.info("successful refresh")
             service = discovery.build('gmail', 'v1', http=http)
             l = ListMessagesWithLabels(service, user.email, maxResults=1)
             mails = []
@@ -57,6 +65,7 @@ class RegisterDaemon(Daemon):
 
                 #print 'previous id email', user.previous
             db.session.commit()
+            logging.info("successful register of %s", user.email)
             return True
 
     def handle(self, msg):
@@ -77,12 +86,12 @@ class RegisterDaemon(Daemon):
                         self.bot.sendMessage(chat_id, 'register failed')
 
     def run(self):   
-
-        TOKEN = '265185588:AAGBUc8hn7O1RtcttDHtYikie4QLCH12mrE'
+        with open('bot_token.txt','r') as f:
+            TOKEN = f.read().strip()
 
         self.bot = telepot.Bot(TOKEN)
         self.bot.message_loop(self.handle)
-        print 'Listening'
+        logging.info('listening')
         
 
         # Keep the program running.
@@ -104,6 +113,8 @@ if __name__ == "__main__":
             daemon.stop()
         elif 'restart' == sys.argv[1]:
             daemon.restart()
+        elif 'run' == sys.argv[1]:
+            daemon.run()
         else:
             print "Unknown command"
             sys.exit(2)

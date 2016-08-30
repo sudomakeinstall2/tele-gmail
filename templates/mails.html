@@ -6,19 +6,15 @@
 
         {% if g.user.is_authenticated %}
         logged in as {{ g.user.email }}‌ | <a href="{{ url_for('logout') }}">Logout</a>
+        | <a href="{{ url_for('revoke') }}">Revoke Access</a>
+        {% else %}
+        <a href="{{ url_for('login') }}">Sign Up / Login</a>
         {% endif %}
+        
 </head>
 <body>
-
-
-{% for mail in mails %}
-<div id="header">
-<b>{{ mail.from_ }}</b> - {{ mail.subject }} - {{ mail.date }}
-</div>
-<div id="snippet">
-{{ mail.snippet|safe }}
-</div>
-{% endfor %}
-
+<p>
+{{message|safe}}
+</p>
 </body>
 </html>
