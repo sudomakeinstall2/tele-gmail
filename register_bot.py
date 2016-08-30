@@ -86,7 +86,7 @@ class RegisterDaemon(Daemon):
                         self.bot.sendMessage(chat_id, 'register failed')
 
     def run(self):   
-        with open('bot_token.txt','r') as f:
+        with open('/home/saeidtheblind/proj/tele-gmail/bot_token.txt','r') as f:
             TOKEN = f.read().strip()
 
         self.bot = telepot.Bot(TOKEN)
